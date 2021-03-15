@@ -1,0 +1,4 @@
+io/flutter/plugins/GeneratedPluginRegistrant.java
+ io.flutter.plugins.GeneratedPluginRegistrant
+ru/nefedov/news_app/BuildConfig.java
+ ru.nefedov.news_app.BuildConfig
