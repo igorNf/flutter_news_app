@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:news_app/services/news_service.dart';
+
+import 'package:collection/collection.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+
+import 'package:news_app/dto/article.dart';
 
 
 TextEditingController controller = new TextEditingController();
@@ -9,12 +12,9 @@ TextEditingController controller = new TextEditingController();
 Future<List<Article>> fetchNews(String query) async {
   print("QUERY ======  ${query}");
 
-  // final response = new NewsService().getNews(query);
-
-  final response = await http.get(Uri.parse("https://newsapi.org/v2/everything" + "?q=${query}&from=2021-03-10&language=en&pageSize=5&apiKey=a6260451b1ca4dcb811e865f7c4b4e19"));
+  final response = await http.get(Uri.parse("https://newsapi.org/v2/everything" + "?q=${query}&from=2021-03-10&language=en&pageSize=20&apiKey=a6260451b1ca4dcb811e865f7c4b4e19"));
   if (response.statusCode == 200) {
-    // If the server did return a 200 OK response,
-    // then parse the JSON.
+
     List<Article> result = [];
     List<dynamic> jsonArticles = jsonDecode(response.body)['articles'];
     for (int i = 0; i < jsonArticles.length; i++) {
@@ -25,9 +25,8 @@ Future<List<Article>> fetchNews(String query) async {
     }
     return result;
   } else {
-    // If the server did not return a 200 OK response,
-    // then throw an exception.
-    throw Exception('Failed to load album');
+
+    throw Exception('Failed to load news');
   }
 
   // var resp = [
@@ -107,7 +106,7 @@ class MyCustomFormState extends State<MyCustomForm> {
                             color: Colors.white,
                             child: News(),
                             width: 380,
-                            height: 600,
+                            height: 650,
                           ),
                         );
                       }));
@@ -158,15 +157,25 @@ class _NewsState extends State<News> {
   }
 
   List<Widget> _buildItems(List<Article> articles) {
+    articles.sort((a, b) => -1 * a.fullDate.compareTo(b.fullDate));
+    var newMap = groupBy(articles, (obj) => obj.date);
 
-    print("controller   ${controller.text}");
-
-    for (int i = 0; i < articles.length; i++) {
-      list.add(Text(articles[i].publishedAt.toIso8601String(), style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)));
-      list.add(Text(articles[i].title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)));
-      list.add(Image.network(articles[i].imageUrl));
-      list.add(Divider());
+    for (MapEntry me in newMap.entries) {
+      // list.add(Text(me.key, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)));
+      list.add(Center(child: Text(me.key, style: Theme.of(context).textTheme.headline5),));
+      for (dynamic ar in me.value) {
+        list.add(Image.network(ar.imageUrl ?? 'https://via.placeholder.com/150'));
+        list.add(Text(ar.title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)));
+        list.add(Divider());
+      }
     }
+
+    // for (int i = 0; i < articles.length; i++) {
+    //   list.add(Text(articles[i].date, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)));
+    //   list.add(Text(articles[i].title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)));
+    //   list.add(Image.network(articles[i].imageUrl));
+    //   list.add(Divider());
+    // }
     return list;
   }
 }
