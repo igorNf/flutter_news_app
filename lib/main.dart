@@ -1,114 +1,204 @@
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(MyApp());
+import 'package:collection/collection.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:transparent_image/transparent_image.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import 'package:news_app/dto/article.dart';
+
+
+TextEditingController controller = new TextEditingController();
+
+Future<List<Article>> fetchNews(String query) async {
+  print("QUERY ======  ${query}");
+
+  final response = await http.get(Uri.parse("https://newsapi.org/v2/everything" + "?q=${query}&from=2021-03-10&language=en&pageSize=100&apiKey=a6260451b1ca4dcb811e865f7c4b4e19"));
+  if (response.statusCode == 200) {
+
+    List<Article> result = [];
+    List<dynamic> jsonArticles = jsonDecode(response.body)['articles'];
+    for (int i = 0; i < jsonArticles.length; i++) {
+      result.add(Article.fromMap(jsonArticles[i]));
+    }
+    return result;
+  } else {
+    throw Exception('Failed to load news');
+  }
 }
 
+Future<List<Article>> articles;
+
+void main() => runApp(MyApp());
+
 class MyApp extends StatelessWidget {
-  // This widget is the root of your application.
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        primarySwatch: Colors.blue,
-      ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
+      title: 'Поиск новостей',
+      home: Scaffold(
+        appBar: AppBar(
+          title: Text('Найди новость'),
+          backgroundColor: Color(0xffed9e37)
+        ),
+        body: Center(
+            child: SearchForm()
+        )
+      )
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  MyHomePage({Key key, this.title}) : super(key: key);
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
+class SearchForm extends StatefulWidget {
   @override
-  _MyHomePageState createState() => _MyHomePageState();
+  SearchFormState createState() {
+    return SearchFormState();
+  }
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class SearchFormState extends State<SearchForm> {
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  Widget build(BuildContext context) {
+
+    return Form(
+        key: _formKey,
+        child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              Container(
+                width: 320,
+                child: TextFormField(validator: (value) {
+                  if(value.isEmpty) {
+                    return "Введите строку для поиска";
+                  }
+                  return null;
+                }, controller: controller,),
+              ),
+              OutlinedButton(
+                  onPressed: () {
+                    if (_formKey.currentState.validate()) {
+                      // ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Processing Data: ${controller.text}')));
+                      Navigator.push(context, MaterialPageRoute<void>(builder: (BuildContext context) {
+                        return Scaffold(
+                          appBar: AppBar(title: Text('Новости')),
+                          body: Container(
+                            color: Colors.white,
+                            child: News(),
+                            width: 380,
+                            height: 650,
+                          ),
+                        );
+                      }));
+                    }
+                  },
+                  child: Icon(Icons.search)
+              )
+            ]
+        )
+    );
+  }
+}
+
+
+class News extends StatefulWidget {
+
+  @override
+  _NewsState createState() => _NewsState();
+}
+
+class _NewsState extends State<News> {
+
+  List<Widget> list = [];
+
+  @override
+  void initState() {
+    super.initState();
+    articles = fetchNews(controller.text);
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+
+    return FutureBuilder<List<Article>>(future: articles,
+    builder: (context, snapshot) {
+      if (snapshot.hasError) {
+        print("Есть ошибки:  ${snapshot.error}");
+      }
+      return snapshot.hasData ? _buildNews(snapshot.data) : Center(child: CircularProgressIndicator());
+    });
+  }
+
+  Widget _buildNews(articles) {
+    return ListView(
+        padding: EdgeInsets.all(16.0),
+        children: _buildItems(articles)
+        );
+  }
+
+  List<Widget> _buildItems(List<Article> articles) {
+    articles.sort((a, b) => -1 * a.fullDate.compareTo(b.fullDate));
+    var newMap = groupBy(articles, (obj) => obj.date);
+
+    for (MapEntry<dynamic, List<Article>> entry in newMap.entries) {
+      list.add(Center(child: Text(entry.key, style: Theme.of(context).textTheme.headline5),));
+      for (Article article in entry.value) {
+        list.add(ArticleCard(article: article));
+      }
+      list.add(Divider());
+    }
+
+    return list;
+  }
+}
+
+class ArticleCard extends StatelessWidget {
+
+  final Article article;
+  ArticleCard({Key key, this.article}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Column(
+        children: [
+          FadeInImage.memoryNetwork(
+            placeholder: kTransparentImage,
+            image: article.imageUrl ?? 'https://via.placeholder.com/150',
+          ),
+          ListTile(
+            title: Text(article.title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => ArticleDetails(article: article,)));
+            },
+          )
+
+        ],),
+    );
+  }
+}
+
+class ArticleDetails extends StatelessWidget {
+  final Article article;
+  ArticleDetails({Key key, this.article}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+      appBar: AppBar(title: Text(article.author),),
+      body: Column(
+        children: [
+          Image.network(article.imageUrl ?? 'https://via.placeholder.com/150'),
+          Text(article.description ?? ''),
+          InkWell(
+            child: Text('Открыть в браузере'),
+            onTap: () => launch(article.url),
+          )
+        ],
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-            Text('А что если написать сюда что то')
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
